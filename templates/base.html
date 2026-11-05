@@ -380,7 +380,7 @@
         
         <aside class="update-banner" id="update-banner" role="status" aria-live="polite">
             <p><strong>Hay una nueva versión</strong> <span id="update-version"></span> <span id="update-notes"></span></p>
-            <a id="update-link" href="https://github.com/celsoleiva73-netizen/ferreteria_app/releases/latest/download/ferreteria-app-codigo.zip" target="_blank" rel="noopener">Descargar actualización</a>
+            <a id="update-link" href="https://github.com/thiago141400-alt/ferreteria-app/releases/latest/download/ferreteria-app-codigo.zip" target="_blank" rel="noopener">Descargar actualización</a>
             <button class="update-close" type="button" aria-label="Cerrar aviso" onclick="document.getElementById('update-banner').classList.remove('visible')">×</button>
         </aside>
 
@@ -421,7 +421,7 @@
 
         async function revisarNuevaVersion() {
             const versionLocal = '{{ version_app }}';
-            const manifestUrl = 'https://raw.githubusercontent.com/celsoleiva73-netizen/ferreteria_app/main/version.json?cache=' + Date.now();
+            const manifestUrl = 'https://raw.githubusercontent.com/thiago141400-alt/ferreteria-app/main/version.json?cache=' + Date.now();
             try {
                 const respuesta = await fetch(manifestUrl, { cache: 'no-store' });
                 if (!respuesta.ok) return;
@@ -434,8 +434,8 @@
 
                 document.getElementById('update-version').textContent = versionRemota.version ? `(${versionRemota.version})` : '';
                 document.getElementById('update-notes').textContent = versionRemota.notes || '';
-                const destino = versionRemota.release_url || 'https://github.com/celsoleiva73-netizen/ferreteria_app/releases/latest/download/ferreteria-app-codigo.zip';
-                if (destino.startsWith('https://github.com/celsoleiva73-netizen/ferreteria_app/')) {
+                const destino = versionRemota.release_url || 'https://github.com/thiago141400-alt/ferreteria-app/releases/latest/download/ferreteria-app-codigo.zip';
+                if (destino.startsWith('https://github.com/thiago141400-alt/ferreteria-app/')) {
                     document.getElementById('update-link').href = destino;
                 }
                 document.getElementById('update-banner').classList.add('visible');

@@ -1,0 +1,32 @@
+# Entornos virtuales
+venv/
+env/
+ENV/
+*.venv/
+
+# Bytecode y cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Logs del servidor
+*.log
+server_err.log
+server_out.log
+
+# Archivos temporales de SQLite
+instance/*.db-journal
+instance/*.db-wal
+instance/*.db-shm
+instance/*.bak
+instance/*_backup.db
+instance/
+backups/
+
+# Sistema Operativo
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini

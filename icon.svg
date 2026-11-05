@@ -1,0 +1,16 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="50" fill="#1A202C"/>
+  <rect x="12" y="12" width="232" height="232" rx="42" stroke="#E08A2C" stroke-width="8"/>
+  <!-- Martillo / Llave -->
+  <path d="M70 186L140 116L124 100L54 170C50 174 50 182 54 186C58 190 66 190 70 186Z" fill="#CBD5E0" stroke="#718096" stroke-width="6"/>
+  <path d="M136 120L180 76C186 70 186 60 180 54L172 46C166 40 156 40 150 46L130 66L110 46C104 40 94 40 88 46L80 54C74 60 74 70 80 76L124 120L136 120Z" fill="#E08A2C" stroke="#DD6B20" stroke-width="6"/>
+  <!-- Código de barras debajo -->
+  <rect x="70" y="196" width="6" height="22" fill="#E08A2C"/>
+  <rect x="82" y="196" width="12" height="22" fill="#E08A2C"/>
+  <rect x="100" y="196" width="4" height="22" fill="#E08A2C"/>
+  <rect x="110" y="196" width="14" height="22" fill="#E08A2C"/>
+  <rect x="130" y="196" width="8" height="22" fill="#E08A2C"/>
+  <rect x="144" y="196" width="16" height="22" fill="#E08A2C"/>
+  <rect x="166" y="196" width="6" height="22" fill="#E08A2C"/>
+  <rect x="178" y="196" width="8" height="22" fill="#E08A2C"/>
+</svg>

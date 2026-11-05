@@ -27,7 +27,7 @@ def leer_version_app():
         with open(os.path.join(BASE_DIR, 'version.json'), encoding='utf-8') as archivo:
             return json.load(archivo)
     except (OSError, json.JSONDecodeError):
-        return {'version': '0.1.0', 'release_url': 'https://github.com/celsoleiva73-netizen/ferreteria_app/releases/latest'}
+        return {'version': '0.1.0', 'release_url': 'https://github.com/thiago141400-alt/ferreteria-app/releases/latest'}
 
 VERSION_APP = leer_version_app()
 

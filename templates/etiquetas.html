@@ -1,0 +1,494 @@
+{% extends "base.html" %}
+
+{% block title %}Imprimir Etiquetas de Códigos de Barra - Ferretería{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Estilos para la pantalla de configuración */
+    .config-panel {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 25px;
+        margin-bottom: 30px;
+    }
+
+    .badge-barcode {
+        background: #edf2f7;
+        color: #2d3748;
+        font-family: monospace;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.9em;
+        border: 1px solid #cbd5e0;
+    }
+
+    /* Contenedor de previsualización */
+    .preview-container {
+        background: #718096;
+        padding: 25px;
+        border-radius: 8px;
+        margin-top: 25px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: center;
+        max-height: 550px;
+        overflow-y: auto;
+    }
+
+    /* Diseño de la etiqueta individual */
+    .etiqueta {
+        background: white;
+        border: 1px dashed #a0aec0;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        text-align: center;
+        padding: 6px;
+        color: black;
+        position: relative;
+    }
+
+    /* Formato Térmico 50mm x 30mm */
+    .formato-termica .etiqueta {
+        width: 50mm;
+        height: 30mm;
+        margin: 0;
+        padding: 4px 6px;
+        page-break-after: always;
+        break-after: page;
+    }
+
+    /* Formato Térmico 60mm x 40mm */
+    .formato-termica-grande .etiqueta {
+        width: 60mm;
+        height: 40mm;
+        margin: 0;
+        padding: 6px 8px;
+        page-break-after: always;
+        break-after: page;
+    }
+
+    /* Formato A4 (Grilla de 3 columnas) */
+    .formato-a4 {
+        display: grid;
+        grid-template-columns: repeat(3, 65mm);
+        gap: 4mm;
+        justify-content: center;
+        background: white;
+        padding: 10mm;
+    }
+
+    .formato-a4 .etiqueta {
+        width: 65mm;
+        height: 34mm;
+        border: 1px dashed #ccc;
+    }
+
+    .etiqueta-header {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #4a5568;
+        line-height: 1;
+        margin-bottom: 2px;
+    }
+
+    .etiqueta-nombre {
+        font-size: 11px;
+        font-weight: bold;
+        line-height: 1.15;
+        max-height: 24px;
+        overflow: hidden;
+        word-break: break-word;
+        color: #1a202c;
+    }
+
+    .etiqueta-barcode {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 2px 0;
+    }
+
+    .etiqueta-barcode img, .etiqueta-barcode svg {
+        max-width: 95%;
+        height: 36px;
+        object-fit: contain;
+    }
+
+    .etiqueta-footer {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0 4px;
+        border-top: 1px solid #eee;
+        padding-top: 2px;
+    }
+
+    .etiqueta-codigo-texto {
+        font-size: 9px;
+        font-family: monospace;
+        color: #718096;
+    }
+
+    .etiqueta-precio {
+        font-size: 14px;
+        font-weight: 900;
+        color: #000;
+    }
+
+    /* Reglas CSS para IMPRESIÓN (Ctrl+P) */
+    @media print {
+        @page {
+            margin: 0;
+        }
+
+        body * {
+            visibility: hidden;
+        }
+
+        #seccion-impresion, #seccion-impresion * {
+            visibility: visible;
+        }
+
+        #seccion-impresion {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: white !important;
+        }
+
+        .no-print, header, nav, .container > *:not(#seccion-impresion) {
+            display: none !important;
+        }
+
+        .etiqueta {
+            border: none !important;
+        }
+
+        .formato-termica {
+            width: 50mm;
+            margin: 0;
+            padding: 0;
+        }
+
+        .formato-termica .etiqueta {
+            width: 50mm !important;
+            height: 30mm !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            break-after: page !important;
+        }
+
+        .formato-termica-grande .etiqueta {
+            width: 60mm !important;
+            height: 40mm !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            break-after: page !important;
+        }
+
+        .formato-a4 {
+            width: 100% !important;
+            padding: 5mm !important;
+            gap: 2mm !important;
+        }
+
+        .formato-a4 .etiqueta {
+            page-break-inside: avoid !important;
+            border: 1px dashed #e2e8f0 !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print">
+    <h2 style="margin-bottom: 22px;">🏷️ Etiquetas</h2>
+
+    <!-- Panel de configuración del formato de impresión -->
+    <div class="config-panel">
+        <h3 style="margin-bottom: 15px; font-size: 1.2em; color: #2d3748;">Formato</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; align-items: end;">
+            <div class="form-group" style="margin: 0;">
+                <label for="tipo-formato" style="font-weight: 600;">Tamaño de etiqueta</label>
+                <select id="tipo-formato" onchange="cambiarFormato()">
+                    <option value="formato-termica" selected>Rollo Térmico 50x30 mm (Zebra, Xprinter, etc.)</option>
+                    <option value="formato-termica-grande">Rollo Térmico 60x40 mm (Etiqueta Grande)</option>
+                    <option value="formato-a4">Hoja A4 Autoadhesiva (Impresora común 3x8)</option>
+                </select>
+            </div>
+
+            <details style="margin:0; align-self:center; color:#60432f;">
+                <summary style="cursor:pointer; font-weight:650;">Más opciones</summary>
+                <div class="form-group" style="margin: 12px 0 0;">
+                    <label for="nombre-comercio" style="font-weight: 600;">Nombre en la etiqueta</label>
+                    <input type="text" id="nombre-comercio" value="FERRETERÍA" oninput="actualizarVistaPrevia()">
+                </div>
+            </details>
+
+            <div>
+                <button class="btn btn-primary" onclick="imprimirSeleccion()" style="padding: 14px 28px; font-size: 1.1em; width: 100%;">
+                    🖨️ Imprimir
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Selección de Artículos a Imprimir -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px;">
+        <div style="display: flex; gap: 10px; align-items: center; flex: 1; min-width: 250px;">
+            <input type="text" id="buscar-etiqueta" placeholder="🔍 Buscar por nombre o código..." oninput="filtrarTabla()" style="margin: 0; width: 100%;">
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="seleccionarConStock()">📦 Solo con Stock</button>
+            <button class="btn" style="background: #48bb78; color: white;" onclick="seleccionarPendientes()">🏷️ Solo pendientes</button>
+            <button class="btn" style="background: #3182ce; color: white;" onclick="generarCodigosFaltantes()">⚡ Auto-Generar Faltantes</button>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 40px; text-align: center;"><input type="checkbox" id="chk-master" onchange="toggleMaster(this)"></th>
+                <th>Artículo</th>
+                <th>Código de Barras</th>
+                <th>Precio Venta</th>
+                <th>Stock</th>
+                <th>Pendientes</th>
+                <th style="width: 140px; text-align: center;">Cantidad de Etiquetas</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-seleccion">
+            {% for a in articulos %}
+            <tr data-id="{{ a.id }}" data-nombre="{{ a.nombre|lower }}" data-codigo="{{ a.codigo_barra or '' }}" data-stock="{{ a.stock_actual }}" data-pendientes="{{ a.etiquetas_pendientes }}">
+                <td style="text-align: center;">
+                    <input type="checkbox" class="chk-item" value="{{ a.id }}" onchange="actualizarVistaPrevia()">
+                </td>
+                <td><strong>{{ a.nombre }}</strong></td>
+                <td>
+                    {% if a.codigo_barra %}
+                        <span class="badge-barcode" id="badge-cb-{{ a.id }}">{{ a.codigo_barra }}</span>
+                    {% else %}
+                        <span style="color: #a44931; font-size: 0.85em;" id="badge-cb-{{ a.id }}">Sin código</span>
+                        <button class="btn btn-primary" style="padding: 5px 9px; font-size: 0.8em; margin-left: 5px;" onclick="generarCodigoArticulo({{ a.id }})">Generar</button>
+                    {% endif %}
+                </td>
+                <td style="color: #2b6cb0; font-weight: bold;">${{ a.precio_venta|numero_ar }}</td>
+                <td>
+                    <span class="badge {% if a.stock_actual <= a.alerta_stock %}badge-danger{% else %}badge-success{% endif %}">
+                        {{ a.stock_actual|numero_ar(0) }} {{ a.tipo_venta }}s
+                    </span>
+                </td>
+                <td><strong id="pendientes-{{ a.id }}">{{ a.etiquetas_pendientes|numero_ar(0) }}</strong></td>
+                <td style="text-align: center;">
+                    <input type="number" id="cant-{{ a.id }}" value="{{ a.etiquetas_pendientes }}" min="0" max="500" step="1" style="width: 70px; text-align: center; margin: 0;" oninput="actualizarVistaPrevia()">
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3 style="margin-top: 35px; color: #2d3748;">👁️ Vista Previa en Pantalla (<span id="total-etiquetas-contador">0</span> etiquetas)</h3>
+</div>
+
+<!-- Contenedor que se renderiza y se manda a la impresora -->
+<div id="seccion-impresion" class="formato-termica">
+    <!-- Aquí se inyectan las etiquetas dinámicamente -->
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const articulosData = {
+        {% for a in articulos %}
+        "{{ a.id }}": {
+            id: {{ a.id }},
+            nombre: {{ a.nombre|tojson }},
+            codigo_barra: {{ (a.codigo_barra or '')|tojson }},
+            precio_venta: {{ a.precio_venta }},
+            stock: {{ a.stock_actual }},
+            etiquetas_pendientes: {{ a.etiquetas_pendientes }}
+        },
+        {% endfor %}
+    };
+
+    function cambiarFormato() {
+        const formato = document.getElementById('tipo-formato').value;
+        const seccion = document.getElementById('seccion-impresion');
+        seccion.className = formato;
+        actualizarVistaPrevia();
+    }
+
+    function toggleMaster(master) {
+        document.querySelectorAll('.chk-item').forEach(chk => {
+            const tr = chk.closest('tr');
+            if (tr.style.display !== 'none') {
+                chk.checked = master.checked;
+            }
+        });
+        actualizarVistaPrevia();
+    }
+
+    function seleccionarConStock() {
+        document.querySelectorAll('#tabla-seleccion tr').forEach(tr => {
+            const stock = parseFloat(tr.dataset.stock) || 0;
+            const chk = tr.querySelector('.chk-item');
+            if (chk) {
+                chk.checked = stock > 0;
+            }
+        });
+        actualizarVistaPrevia();
+    }
+
+    function seleccionarPendientes() {
+        document.querySelectorAll('#tabla-seleccion tr').forEach(tr => {
+            const pendientes = parseInt(tr.dataset.pendientes, 10) || 0;
+            const chk = tr.querySelector('.chk-item');
+            if (!chk) return;
+            chk.checked = pendientes > 0;
+            document.getElementById(`cant-${tr.dataset.id}`).value = pendientes;
+        });
+        document.getElementById('chk-master').checked = false;
+        actualizarVistaPrevia();
+    }
+
+    function filtrarTabla() {
+        const texto = document.getElementById('buscar-etiqueta').value.toLowerCase().trim();
+        document.querySelectorAll('#tabla-seleccion tr').forEach(tr => {
+            const nombre = tr.dataset.nombre || '';
+            const codigo = tr.dataset.codigo || '';
+            const coincide = nombre.includes(texto) || codigo.includes(texto);
+            tr.style.display = coincide ? '' : 'none';
+        });
+    }
+
+    async function generarCodigoArticulo(id) {
+        try {
+            const res = await fetch(`/api/articulo/${id}/generar_codigo`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                articulosData[id].codigo_barra = data.codigo_barra;
+                const badge = document.getElementById(`badge-cb-${id}`);
+                badge.className = 'badge-barcode';
+                badge.textContent = data.codigo_barra;
+                badge.style.color = '#2d3748';
+                
+                // Actualizar dataset del tr
+                const tr = document.querySelector(`tr[data-id="${id}"]`);
+                if (tr) tr.dataset.codigo = data.codigo_barra;
+
+                mostrarAlerta(`Código ${data.codigo_barra} generado para ${articulosData[id].nombre}`);
+                actualizarVistaPrevia();
+            } else {
+                alert(data.error || 'Error al generar código');
+            }
+        } catch (e) {
+            alert('Error de conexión con el servidor');
+        }
+    }
+
+    function actualizarVistaPrevia() {
+        const contenedor = document.getElementById('seccion-impresion');
+        contenedor.innerHTML = '';
+        const nombreComercio = document.getElementById('nombre-comercio').value.trim() || 'FERRETERÍA';
+
+        let totalEtiquetas = 0;
+
+        document.querySelectorAll('.chk-item:checked').forEach(chk => {
+            const id = chk.value;
+            const item = articulosData[id];
+            if (!item) return;
+
+            const cant = Math.max(0, parseInt(document.getElementById(`cant-${id}`).value, 10) || 0);
+            if (cant === 0) return;
+            const codigo = item.codigo_barra || `FERR-${String(item.id).padStart(6, '0')}`;
+            const precioFormateado = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(item.precio_venta);
+
+            for (let i = 0; i < cant; i++) {
+                totalEtiquetas++;
+                const etiqueta = document.createElement('div');
+                etiqueta.className = 'etiqueta';
+                etiqueta.innerHTML = `
+                    <div class="etiqueta-header">${nombreComercio}</div>
+                    <div class="etiqueta-nombre" title="${item.nombre}">${item.nombre}</div>
+                    <div class="etiqueta-barcode">
+                        <img src="/barcode/${encodeURIComponent(codigo)}.svg" alt="Código de barras ${codigo}">
+                    </div>
+                    <div class="etiqueta-footer">
+                        <span class="etiqueta-codigo-texto">${codigo}</span>
+                        <span class="etiqueta-precio">${precioFormateado}</span>
+                    </div>
+                `;
+                contenedor.appendChild(etiqueta);
+            }
+        });
+
+        document.getElementById('total-etiquetas-contador').textContent = totalEtiquetas;
+    }
+
+    async function imprimirSeleccion() {
+        const items = Array.from(document.querySelectorAll('.chk-item:checked')).map(chk => ({
+            articulo_id: parseInt(chk.value, 10),
+            cantidad: Math.max(0, parseInt(document.getElementById(`cant-${chk.value}`).value, 10) || 0)
+        })).filter(item => item.cantidad > 0);
+        if (!items.length) {
+            mostrarAlerta('No hay etiquetas seleccionadas para imprimir.', 'warning');
+            return;
+        }
+        window.print();
+        try {
+            const response = await fetch('/api/articulos/etiquetas/imprimir', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({items})
+            });
+            const result = await response.json();
+            if (result.success) {
+                items.forEach(item => {
+                    const a = articulosData[item.articulo_id];
+                    a.etiquetas_pendientes = Math.max(0, a.etiquetas_pendientes - item.cantidad);
+                    document.querySelector(`tr[data-id="${item.articulo_id}"]`).dataset.pendientes = a.etiquetas_pendientes;
+                    document.getElementById(`pendientes-${item.articulo_id}`).textContent = formatNumero(a.etiquetas_pendientes, 0);
+                    document.getElementById(`cant-${item.articulo_id}`).value = a.etiquetas_pendientes;
+                });
+                actualizarVistaPrevia();
+            }
+        } catch (e) {
+            mostrarAlerta('No se pudo actualizar el contador de etiquetas pendientes.', 'error');
+        }
+    }
+
+    async function generarCodigosFaltantes() {
+        if (!confirm('¿Generar automáticamente códigos de barra únicos a todos los artículos que aún no tengan?')) return;
+        try {
+            const res = await fetch('/api/articulos/generar_todos_codigos', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                mostrarAlerta(`✓ ${data.generados} códigos de barra generados automáticamente`, 'success');
+                setTimeout(() => window.location.reload(), 800);
+            }
+        } catch (e) {
+            alert('Error de conexión');
+        }
+    }
+
+    // Inicializar previsualización al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+        // Seleccionar los primeros 5 o con stock por comodidad
+        seleccionarConStock();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes - Ferretería{% endblock %}
+
+{% block content %}
+<h2>📊 Reportes y Estadísticas</h2>
+
+<!-- Resumen del día -->
+<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+    <div class="card">
+        <div class="card-title">💰 Total Vendido Hoy</div>
+        <div class="card-value" style="color: #48bb78;">${{ total_vendido_hoy|numero_ar }}</div>
+    </div>
+    
+    <div class="card">
+        <div class="card-title">📉 Total Invertido Hoy</div>
+        <div class="card-value" style="color: #f56565;">${{ costo_hoy|numero_ar }}</div>
+    </div>
+    
+    <div class="card">
+        <div class="card-title">📈 Ganancia Neta Hoy</div>
+        <div class="card-value" style="color: #e08a2c;">${{ ganancia_hoy|numero_ar }}</div>
+    </div>
+</div>
+
+<!-- Artículos bajo stock -->
+<div style="margin-top: 40px;">
+    <h3>⚠️ Artículos para Reponer</h3>
+    
+    {% if articulos_bajo_stock %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Artículo</th>
+                    <th>Unidad</th>
+                    <th>Stock Actual</th>
+                    <th>Stock Mínimo</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for articulo in articulos_bajo_stock %}
+                <tr>
+                    <td><strong>{{ articulo.nombre }}</strong></td>
+                    <td>{{ articulo.tipo_venta }}</td>
+                    <td><strong>{{ articulo.stock_actual|numero_ar(0) }}</strong></td>
+                    <td>{{ articulo.alerta_stock|numero_ar(0) }}</td>
+                    <td><span class="badge badge-danger">REPONER</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-success" style="text-align: center; padding: 30px;">
+            ✓ Todos los artículos tienen stock suficiente
+        </div>
+    {% endif %}
+</div>
+
+<!-- Consulta por fecha -->
+<div style="margin-top: 40px; background: #f9fafb; padding: 20px; border-radius: 8px;">
+    <h3>Consultar por Fecha</h3>
+    
+    <div style="display: grid; grid-template-columns: 200px 1fr; gap: 20px; margin-top: 20px;">
+        <div class="form-group" style="margin: 0;">
+            <label for="fecha-consulta">Selecciona una fecha:</label>
+            <input type="date" id="fecha-consulta" onchange="consultarPorFecha()">
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div>
+                <div style="font-size: 0.9em; color: #999;">Vendido</div>
+                <div id="vendido-fecha" style="font-size: 1.5em; font-weight: bold; color: #48bb78;">-</div>
+            </div>
+            <div>
+                <div style="font-size: 0.9em; color: #999;">Invertido</div>
+                <div id="invertido-fecha" style="font-size: 1.5em; font-weight: bold; color: #f56565;">-</div>
+            </div>
+            <div>
+                <div style="font-size: 0.9em; color: #999;">Ganancia</div>
+                <div id="ganancia-fecha" style="font-size: 1.5em; font-weight: bold; color: #e08a2c;">-</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Consulta por rango de fechas + exportar -->
+<div style="margin-top: 30px; background: #f9fafb; padding: 20px; border-radius: 8px;">
+    <h3>Consultar por Rango de Fechas</h3>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; margin-top: 20px; align-items: end;">
+        <div class="form-group" style="margin: 0;">
+            <label for="rango-desde">Desde:</label>
+            <input type="date" id="rango-desde">
+        </div>
+        <div class="form-group" style="margin: 0;">
+            <label for="rango-hasta">Hasta:</label>
+            <input type="date" id="rango-hasta">
+        </div>
+        <button class="btn btn-primary" onclick="consultarPorRango()" style="padding: 12px;">Consultar</button>
+        <button class="btn btn-success" onclick="exportarCsv()" style="padding: 12px;">📥 Exportar a Excel (CSV)</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px;">
+        <div>
+            <div style="font-size: 0.9em; color: #999;">Vendido</div>
+            <div id="vendido-rango" style="font-size: 1.5em; font-weight: bold; color: #48bb78;">-</div>
+        </div>
+        <div>
+            <div style="font-size: 0.9em; color: #999;">Invertido</div>
+            <div id="invertido-rango" style="font-size: 1.5em; font-weight: bold; color: #f56565;">-</div>
+        </div>
+        <div>
+            <div style="font-size: 0.9em; color: #999;">Ganancia</div>
+            <div id="ganancia-rango" style="font-size: 1.5em; font-weight: bold; color: #e08a2c;">-</div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Configurar la fecha de hoy por defecto
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('fecha-consulta').value = hoy;
+    
+    function consultarPorFecha() {
+        const fecha = document.getElementById('fecha-consulta').value;
+        
+        fetch('/api/reportes/por-fecha?fecha=' + fecha)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('vendido-fecha').textContent = '$' + formatNumero(data.vendido);
+                document.getElementById('invertido-fecha').textContent = '$' + formatNumero(data.invertido);
+                document.getElementById('ganancia-fecha').textContent = '$' + formatNumero(data.ganancia);
+            })
+            .catch(() => {
+                document.getElementById('vendido-fecha').textContent = '$0.00';
+                document.getElementById('invertido-fecha').textContent = '$0.00';
+                document.getElementById('ganancia-fecha').textContent = '$0.00';
+            });
+    }
+    
+    // Cargar datos de hoy al abrir
+    consultarPorFecha();
+
+    // Rango de fechas: por defecto, del primer día del mes a hoy
+    const primerDiaMes = new Date();
+    primerDiaMes.setDate(1);
+    document.getElementById('rango-desde').value = primerDiaMes.toISOString().split('T')[0];
+    document.getElementById('rango-hasta').value = hoy;
+
+    function consultarPorRango() {
+        const desde = document.getElementById('rango-desde').value;
+        const hasta = document.getElementById('rango-hasta').value;
+
+        fetch(`/api/reportes/rango?desde=${desde}&hasta=${hasta}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('vendido-rango').textContent = '$' + formatNumero(data.vendido);
+                document.getElementById('invertido-rango').textContent = '$' + formatNumero(data.invertido);
+                document.getElementById('ganancia-rango').textContent = '$' + formatNumero(data.ganancia);
+            });
+    }
+
+    function exportarCsv() {
+        const desde = document.getElementById('rango-desde').value;
+        const hasta = document.getElementById('rango-hasta').value;
+        window.location.href = `/api/reportes/exportar?desde=${desde}&hasta=${hasta}`;
+    }
+
+    consultarPorRango();
+</script>
+{% endblock %}

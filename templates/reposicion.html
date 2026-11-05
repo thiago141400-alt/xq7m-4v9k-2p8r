@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Reposición de Stock - Ferretería{% endblock %}
+
+{% block extra_css %}
+<style>
+    .scanner-bar-repo {
+        background: #2d3748;
+        border: 2px solid #4299e1;
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: white;
+    }
+
+    .scanner-input-repo {
+        flex: 1;
+        font-size: 1.1em;
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: 2px solid #4a5568;
+        background: #1a202c;
+        color: #63b3ed;
+        font-family: monospace;
+    }
+    .scanner-input-repo:focus {
+        outline: none;
+        border-color: #3182ce;
+        box-shadow: 0 0 8px rgba(66, 153, 225, 0.5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>📥 Reposición de Stock</h2>
+
+<div class="card" style="max-width: 750px; margin: 25px 0;">
+    <!-- Barra de escaneo rápido para reponer -->
+    <div class="scanner-bar-repo">
+        <span style="font-size: 1.6em;">📷</span>
+        <input type="text" id="escaner-repo" class="scanner-input-repo" 
+               placeholder="Escanear código del producto recibido (Enter)..." autofocus>
+        <span style="font-size: 0.85em; color: #a0aec0;">Lector Listo</span>
+    </div>
+
+    <div class="card-title">Carga Manual de Mercadería</div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+        <div class="form-group">
+            <label for="articulo-repo">Artículo *</label>
+            <select id="articulo-repo" required>
+                <option value="">-- Selecciona un artículo --</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cantidad-repo">Cantidad a Ingresar *</label>
+            <input type="number" id="cantidad-repo" placeholder="1" value="1" min="1" required>
+        </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="agregarAlCarrito()" style="width: 100%; padding: 16px;">
+        🛒 Agregar al Carrito de Reposición
+    </button>
+</div>
+
+<div class="card" style="max-width: 750px;">
+    <div class="card-title">🛒 Carrito de Reposición (<span id="carrito-cantidad">0</span> artículos)</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Artículo</th>
+                <th>Código</th>
+                <th>Cantidad a Reponer</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="tabla-carrito">
+            <tr>
+                <td colspan="4" style="text-align: center; padding: 20px; color: #999;">El carrito está vacío. Escanea productos o selecciónalos arriba.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+        <button class="btn btn-danger" onclick="vaciarCarrito()" style="padding: 16px;">
+            ✕ Vaciar Carrito
+        </button>
+        <button class="btn btn-success" id="btn-confirmar-reposicion" onclick="confirmarReposicion()" style="font-size: 1.1em; padding: 16px;" disabled>
+            ✓ Confirmar Ingreso de Stock
+        </button>
+    </div>
+</div>
+
+<h3 style="margin-top: 40px;">Historial de Reposiciones</h3>
+<p style="color: #666; margin-bottom: 10px;">El historial es permanente y no se borra automáticamente. Eliminar un registro solo borra ese renglón del historial: el stock actual no cambia.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Nº Reposición</th>
+            <th>Fecha</th>
+            <th>Productos</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody id="tabla-reposiciones">
+        <tr>
+            <td colspan="4" style="text-align: center; padding: 20px;">Cargando reposiciones...</td>
+        </tr>
+    </tbody>
+</table>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let articulosData = {};
+    let carrito = [];
+
+    function cargarArticulos() {
+        fetch('/api/articulos')
+            .then(r => r.json())
+            .then(articulos => {
+                articulosData = {};
+                const select = document.getElementById('articulo-repo');
+                select.innerHTML = '<option value="">-- Selecciona un artículo --</option>';
+
+                articulos.forEach(a => {
+                    articulosData[a.id] = a;
+                    const cbText = a.codigo_barra ? `[CB: ${a.codigo_barra}]` : '';
+                    select.innerHTML += `<option value="${a.id}">${a.nombre} ${cbText} (Stock actual: ${formatNumero(a.stock_actual, 0)})</option>`;
+                });
+            });
+    }
+
+    async function escanearParaReposicion(codigo) {
+        codigo = (codigo || '').trim();
+        if (!codigo) return;
+
+        try {
+            const res = await fetch('/api/articulo/buscar_codigo/' + encodeURIComponent(codigo));
+            const data = await res.json();
+            if (data.success && data.articulo) {
+                const art = data.articulo;
+                const idx = carrito.findIndex(i => String(i.articulo_id) === String(art.id));
+                if (idx >= 0) {
+                    carrito[idx].cantidad += 1;
+                } else {
+                    carrito.push({
+                        articulo_id: art.id,
+                        nombre: art.nombre,
+                        codigo_barra: art.codigo_barra,
+                        tipo_venta: art.tipo_venta,
+                        cantidad: 1
+                    });
+                }
+                renderCarrito();
+                mostrarAlerta(`✓ [${art.nombre}] sumado a la reposición`, 'success');
+            } else {
+                mostrarAlerta(`Código '${codigo}' no encontrado en el inventario`, 'error');
+            }
+        } catch (e) {
+            mostrarAlerta('Error de conexión', 'error');
+        } finally {
+            const input = document.getElementById('escaner-repo');
+            input.value = '';
+            input.focus();
+        }
+    }
+
+    document.getElementById('escaner-repo').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            escanearParaReposicion(e.target.value);
+        }
+    });
+
+    function agregarAlCarrito() {
+        const articuloId = document.getElementById('articulo-repo').value;
+        const cantidad = parseInt(document.getElementById('cantidad-repo').value);
+
+        if (!articuloId || !cantidad || cantidad <= 0) {
+            mostrarAlerta('Completa todos los datos', 'error');
+            return;
+        }
+
+        const articulo = articulosData[articuloId];
+        const idx = carrito.findIndex(i => String(i.articulo_id) === String(articuloId));
+        if (idx >= 0) {
+            carrito[idx].cantidad += cantidad;
+        } else {
+            carrito.push({
+                articulo_id: articuloId,
+                nombre: articulo.nombre,
+                codigo_barra: articulo.codigo_barra,
+                tipo_venta: articulo.tipo_venta,
+                cantidad
+            });
+        }
+
+        document.getElementById('articulo-repo').value = '';
+        document.getElementById('cantidad-repo').value = '1';
+        renderCarrito();
+        document.getElementById('escaner-repo').focus();
+    }
+
+    function quitarDelCarrito(index) {
+        carrito.splice(index, 1);
+        renderCarrito();
+    }
+
+    function vaciarCarrito() {
+        carrito = [];
+        renderCarrito();
+        document.getElementById('escaner-repo').focus();
+    }
+
+    function renderCarrito() {
+        const tbody = document.getElementById('tabla-carrito');
+        document.getElementById('carrito-cantidad').textContent = carrito.length;
+
+        if (carrito.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #999;">El carrito está vacío. Escanea productos o selecciónalos arriba.</td></tr>';
+        } else {
+            tbody.innerHTML = carrito.map((item, i) => `
+                <tr>
+                    <td><strong>${item.nombre}</strong></td>
+                    <td><span style="font-family: monospace; color: #718096;">${item.codigo_barra || '-'}</span></td>
+                    <td><strong>${formatNumero(item.cantidad, 0)}</strong> ${item.tipo_venta.toLowerCase()}(s)</td>
+                    <td><button class="btn btn-danger" style="padding: 6px 12px;" onclick="quitarDelCarrito(${i})">✕</button></td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('btn-confirmar-reposicion').disabled = carrito.length === 0;
+    }
+
+    function confirmarReposicion() {
+        if (carrito.length === 0) return;
+
+        const items = carrito.map(i => ({ articulo_id: i.articulo_id, cantidad: i.cantidad }));
+
+        fetch('/api/reposicion/crear_multiple', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({items})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                mostrarAlerta('✓ Reposición #' + data.numero_dia + ' registrada: ' + carrito.length + ' producto(s) sumados al stock', 'success');
+                vaciarCarrito();
+                cargarArticulos();
+                cargarHistorial();
+            } else {
+                mostrarAlerta(data.error || 'No se pudo registrar la reposición', 'error');
+            }
+        });
+    }
+
+    function cargarHistorial() {
+        fetch('/api/reposiciones/transacciones')
+            .then(r => r.json())
+            .then(transacciones => {
+                const tbody = document.getElementById('tabla-reposiciones');
+
+                if (transacciones.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #999;">Todavía no hay reposiciones registradas.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = transacciones.map(t => `
+                    <tr>
+                        <td><strong>#${t.numero_dia}</strong></td>
+                        <td>${t.fecha}</td>
+                        <td>${t.cantidad_items} producto(s)</td>
+                        <td><button class="btn btn-primary" style="padding: 6px 12px;" onclick="verDetalleReposicion(${t.id})">Ver detalle</button></td>
+                    </tr>
+                    <tr id="fila-repo-${t.id}" style="display: none;">
+                        <td colspan="4" id="contenido-repo-${t.id}"></td>
+                    </tr>
+                `).join('');
+            });
+    }
+
+    function verDetalleReposicion(id) {
+        const fila = document.getElementById(`fila-repo-${id}`);
+        const estabaAbierta = fila.style.display !== 'none';
+
+        document.querySelectorAll('[id^="fila-repo-"]').forEach(f => f.style.display = 'none');
+        if (estabaAbierta) return;
+
+        fetch(`/api/reposicion/transaccion/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                const contenido = document.getElementById(`contenido-repo-${id}`);
+                contenido.innerHTML = `
+                    <div style="background: #f0f2f5; padding: 15px; border-radius: 6px;">
+                        <table style="margin: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Artículo</th>
+                                    <th>Cantidad repuesta</th>
+                                    <th>Stock actual</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.items.map(i => `
+                                    <tr>
+                                        <td>${i.articulo}</td>
+                                        <td>+${formatNumero(i.cantidad, 0)} ${i.tipo_venta.toLowerCase()}</td>
+                                        <td><strong>${i.stock_actual}</strong></td>
+                                        <td><button class="btn btn-danger" style="padding: 6px 12px;" onclick="eliminarRenglonRepo(${i.id}, ${id})">🗑️</button></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                fila.style.display = '';
+            });
+    }
+
+    function eliminarRenglonRepo(itemId, transaccionId) {
+        if (!confirm('¿Eliminar este renglón del historial? El stock actual NO se va a modificar.')) {
+            return;
+        }
+
+        fetch(`/api/reposicion/${itemId}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✓ Registro eliminado del historial (stock conservado)', 'success');
+                    cargarHistorial();
+                }
+            });
+    }
+
+    cargarArticulos();
+    cargarHistorial();
+</script>
+{% endblock %}

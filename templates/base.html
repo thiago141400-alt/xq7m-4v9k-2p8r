@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ferretería{% endblock %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --ink: #38291f;
+            --muted: #78685b;
+            --line: #eadbc9;
+            --paper: #ffffff;
+            --canvas: #f7efe4;
+            --accent: #dd762c;
+            --accent-dark: #b95720;
+            --olive: #718044;
+            --shadow: 0 18px 48px rgba(75, 48, 28, .13);
+        }
+
+        body {
+            font-family: Inter, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(ellipse at 10% 8%, rgba(232,139,63,.25), transparent 27rem),
+                radial-gradient(ellipse at 91% 16%, rgba(164,126,65,.20), transparent 30rem),
+                radial-gradient(ellipse at 42% 100%, rgba(198,109,68,.12), transparent 35rem),
+                linear-gradient(145deg, #fbf4e9 0%, #f1e6d5 52%, #f6eee2 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 28px;
+        }
+
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+            background: var(--paper);
+            border: 1px solid rgba(255,255,255,.8);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        header {
+            background:
+                radial-gradient(circle at 86% 0%, rgba(238,157,76,.24), transparent 20rem),
+                linear-gradient(110deg, #3a261e 0%, #60402b 100%);
+            color: white;
+            padding: 26px 34px;
+            text-align: left;
+            border-bottom: 4px solid var(--accent);
+        }
+
+        header h1 {
+            font-size: clamp(1.55rem, 3vw, 2.15rem);
+            letter-spacing: -.035em;
+            margin-bottom: 0;
+        }
+
+        header p {
+            color: rgba(255,255,255,.72);
+            font-size: .92rem;
+            margin-top: 5px;
+        }
+
+        nav {
+            display: flex;
+            background: #fcf8f1;
+            border-bottom: 1px solid var(--line);
+            padding: 0 14px;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            flex: 1;
+            padding: 15px 12px;
+            text-align: center;
+            text-decoration: none;
+            color: #695646;
+            font-weight: 650;
+            font-size: .94rem;
+            transition: all 0.2s ease;
+            border-bottom: 3px solid transparent;
+            min-width: 120px;
+        }
+
+        nav a:hover {
+            background: #f5ecdc;
+            border-bottom-color: var(--olive);
+            color: var(--ink);
+        }
+
+        nav a.active {
+            background: white;
+            border-bottom-color: var(--accent);
+            color: var(--accent-dark);
+        }
+        
+        .content {
+            padding: clamp(22px, 3.2vw, 42px);
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 9px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(189, 100, 24, 0.24);
+        }
+        
+        .btn-success {
+            background: #16816f;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #116c5e;
+        }
+        
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d3dee1;
+            border-radius: 9px;
+            font-size: 1em;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background-color: #fff;
+            color: var(--ink);
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--olive);
+            box-shadow: 0 0 0 3px rgba(113, 128, 68, 0.15);
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .card {
+            background: white;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 22px;
+            box-shadow: 0 3px 12px rgba(28,52,63,.055);
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 10px 24px rgba(28,52,63,.10);
+            transform: translateY(-1px);
+        }
+        
+        .card-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--ink);
+        }
+
+        .card-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--accent-dark);
+        }
+        
+        .alert {
+            padding: 16px;
+            border-radius: 9px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #c6efce;
+            color: #006100;
+            border: 1px solid #9cce7b;
+        }
+        
+        .alert-error {
+            background: #ffc7ce;
+            color: #9c0006;
+            border: 1px solid #ff8a9b;
+        }
+        
+        .alert-warning {
+            background: #ffe699;
+            color: #7f6000;
+            border: 1px solid #ffc000;
+        }
+
+        .update-banner { 
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 13px 22px;
+            color: #53351f;
+            background: linear-gradient(100deg, #fff0d6, #ffe5c1);
+            border-bottom: 1px solid #f2c98f;
+        }
+        .update-banner.visible { display: flex; }
+        .update-banner p { margin: 0; }
+        .update-banner a { color: #9b4d1c; font-weight: 750; white-space: nowrap; }
+        .update-close { border: 0; background: transparent; color: #775338; font-size: 1.3rem; cursor: pointer; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        table th {
+            background: #edf3f2;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #d7e2e3;
+        }
+        
+        table td {
+            padding: 13px 12px;
+            border-bottom: 1px solid #edf1f1;
+        }
+        
+        table tbody tr:hover {
+            background: #f6f9f8;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #c6efce;
+            color: #006100;
+        }
+        
+        .badge-danger {
+            background: #ffc7ce;
+            color: #9c0006;
+        }
+        
+        .badge-warning {
+            background: #ffe699;
+            color: #7f6000;
+        }
+
+        h2 { color: var(--ink); letter-spacing: -.025em; }
+        h3 { color: #294452; letter-spacing: -.015em; }
+        small { line-height: 1.45; }
+        ::selection { background: rgba(221,118,44,.2); }
+        button, a, input, select { -webkit-tap-highlight-color: transparent; }
+        button:focus-visible, a:focus-visible { outline: 3px solid rgba(221,118,44,.5); outline-offset: 2px; }
+        
+        @media (max-width: 768px) {
+            nav {
+                flex-direction: column;
+            }
+            
+            nav a {
+                border-bottom: none;
+                border-right: 3px solid transparent;
+            }
+            
+            nav a:hover {
+                border-right-color: #e08a2c;
+                border-bottom: none;
+            }
+
+            nav a.active {
+                border-right-color: #e08a2c;
+                border-bottom: none;
+            }
+            
+            body { padding: 12px; }
+            header {
+                padding: 22px;
+            }
+            header h1 {
+                font-size: 1.6em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            nav { padding: 4px; }
+            nav a { text-align: left; padding: 11px 14px; }
+        }
+
+        @media (max-width: 520px) {
+            body { padding: 0; background: #f7efe4; }
+            .container { border-radius: 0; border: 0; min-height: 100vh; }
+            .content { padding: 18px 14px; }
+            .btn { min-height: 44px; }
+            table { display: block; overflow-x: auto; white-space: nowrap; }
+        }
+
+        @media print {
+            body {
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .container {
+                box-shadow: none !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+                border-radius: 0 !important;
+            }
+            header, nav, .no-print {
+                display: none !important;
+            }
+            .content {
+                padding: 0 !important;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 Ferretería</h1>
+            <p>Ventas e inventario en un solo lugar</p>
+        </header>
+        
+        <nav>
+            <a href="/" class="{% if request.endpoint == 'inventario' %}active{% endif %}">📦 Inventario</a>
+            <a href="/venta" class="{% if request.endpoint == 'venta' %}active{% endif %}">💰 Ventas (POS)</a>
+            <a href="/reposicion" class="{% if request.endpoint == 'reposicion' %}active{% endif %}">📥 Reposición</a>
+            <a href="/etiquetas" class="{% if request.endpoint == 'etiquetas' %}active{% endif %}">🏷️ Etiquetas y Códigos</a>
+            <a href="/reportes" class="{% if request.endpoint == 'reportes' %}active{% endif %}">📊 Reportes</a>
+        </nav>
+        
+        <aside class="update-banner" id="update-banner" role="status" aria-live="polite">
+            <p><strong>Hay una nueva versión</strong> <span id="update-version"></span> <span id="update-notes"></span></p>
+            <a id="update-link" href="https://github.com/celsoleiva73-netizen/ferreteria_app/releases/latest/download/ferreteria-app-codigo.zip" target="_blank" rel="noopener">Descargar actualización</a>
+            <button class="update-close" type="button" aria-label="Cerrar aviso" onclick="document.getElementById('update-banner').classList.remove('visible')">×</button>
+        </aside>
+
+        <div class="content">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    
+    <script>
+        function mostrarAlerta(mensaje, tipo = 'success') {
+            const alerta = document.createElement('div');
+            alerta.className = `alert alert-${tipo}`;
+            alerta.textContent = mensaje;
+            
+            const content = document.querySelector('.content');
+            content.insertBefore(alerta, content.firstChild);
+            
+            setTimeout(() => alerta.remove(), 5000);
+        }
+        
+        function formatPeso(num) {
+            return '$' + formatNumero(num);
+        }
+
+        function formatNumero(num, decimales = 2) {
+            const valor = Number(num);
+            return new Intl.NumberFormat('es-AR', {
+                minimumFractionDigits: decimales,
+                maximumFractionDigits: decimales
+            }).format(Number.isFinite(valor) ? valor : 0);
+        }
+
+        async function revisarNuevaVersion() {
+            const versionLocal = '{{ version_app }}';
+            const manifestUrl = 'https://raw.githubusercontent.com/celsoleiva73-netizen/ferreteria_app/main/version.json?cache=' + Date.now();
+            try {
+                const respuesta = await fetch(manifestUrl, { cache: 'no-store' });
+                if (!respuesta.ok) return;
+                const versionRemota = await respuesta.json();
+                const numerar = version => String(version || '0').split('.').map(n => parseInt(n, 10) || 0);
+                const local = numerar(versionLocal);
+                const remota = numerar(versionRemota.version);
+                const hayActualizacion = remota.some((n, i) => n > (local[i] || 0) && remota.slice(0, i).every((prev, j) => prev === (local[j] || 0)));
+                if (!hayActualizacion) return;
+
+                document.getElementById('update-version').textContent = versionRemota.version ? `(${versionRemota.version})` : '';
+                document.getElementById('update-notes').textContent = versionRemota.notes || '';
+                const destino = versionRemota.release_url || 'https://github.com/celsoleiva73-netizen/ferreteria_app/releases/latest/download/ferreteria-app-codigo.zip';
+                if (destino.startsWith('https://github.com/celsoleiva73-netizen/ferreteria_app/')) {
+                    document.getElementById('update-link').href = destino;
+                }
+                document.getElementById('update-banner').classList.add('visible');
+            } catch (error) {
+                // El sistema sigue funcionando con normalidad si no hay internet.
+            }
+        }
+
+        revisarNuevaVersion();
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

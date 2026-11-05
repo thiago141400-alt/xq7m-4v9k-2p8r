@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block title %}Inventario - Ferretería{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-barcode {
+        background: #edf2f7;
+        color: #2d3748;
+        font-family: monospace;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        border: 1px solid #cbd5e0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>📦 Inventario de Artículos</h2>
+
+<div style="margin: 25px 0; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+    <button class="btn btn-primary" onclick="toggleFormula()">+ Agregar Artículo</button>
+    <input type="text" id="buscar-articulo" placeholder="🔍 Escanear código de barras o buscar por nombre..." style="flex: 1; min-width: 260px;" oninput="filtrarArticulos()">
+    <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; margin: 0; white-space: nowrap;">
+        <input type="checkbox" id="mostrar-inactivos" style="width: auto;" onchange="cargarArticulos()">
+        Mostrar dados de baja
+    </label>
+</div>
+
+<div id="formulario" style="display: none; background: #f9fafb; padding: 25px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #e2e8f0;">
+    <h3 style="margin-bottom: 15px;">Nuevo Artículo</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
+        <div class="form-group">
+            <label for="nombre">Nombre del Artículo *</label>
+            <input type="text" id="nombre" placeholder="Ej: Tornillo 8x1" required>
+        </div>
+        <div class="form-group">
+            <label for="codigo_barra">Código de Barras</label>
+            <div style="display: flex; gap: 6px;">
+                <input type="text" id="codigo_barra" placeholder="Escanea o genera uno" style="font-family: monospace;">
+                <button type="button" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85em; white-space: nowrap;" onclick="generarCodigoNuevoFormulario()">
+                    ⚡ Auto
+                </button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="tipo_venta">Se vende por *</label>
+            <select id="tipo_venta" onchange="calcularPrecioVenta()" required>
+                <option value="Unidad">Unidad</option>
+                <option value="Metro">Metro</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="precio_compra">Precio de Compra ($) *</label>
+            <input type="number" id="precio_compra" placeholder="0.00" step="0.01" oninput="calcularPrecioVenta()" required>
+        </div>
+        <div class="form-group">
+            <label for="margen_porcentaje">Ganancia (%) *</label>
+            <input type="number" id="margen_porcentaje" placeholder="Ej: 60" step="0.01" value="60" oninput="calcularPrecioVenta()" required>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="lleva_etiqueta" checked style="width: 18px; margin: 0;">
+                Lleva etiqueta de precio
+            </label>
+        </div>
+        <details class="advanced-options">
+            <summary>Más opciones</summary>
+            <div class="advanced-options-grid">
+                <div class="form-group">
+                    <label for="precio_venta_manual">Precio de venta manual ($)</label>
+                    <input type="number" id="precio_venta_manual" placeholder="Usar precio calculado" step="0.01" oninput="calcularPrecioVenta()">
+                </div>
+                <div class="form-group">
+                    <label for="cantidad">Cantidad inicial</label>
+                    <input type="number" id="cantidad" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label for="alerta_stock">Avisar con este stock o menos</label>
+                    <input type="number" id="alerta_stock" placeholder="5" value="5" min="0">
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <div style="background: #f0f2f5; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <span style="color: #666;">Precio de venta calculado:</span>
+        <strong id="precio-venta-preview" style="float: right; font-size: 1.2em; color: #e08a2c;">-</strong>
+    </div>
+
+    <button class="btn btn-success" onclick="crearArticulo()">Guardar Artículo</button>
+    <button class="btn" style="background: #999; color: white; margin-left: 10px;" onclick="toggleFormula()">Cancelar</button>
+</div>
+
+<style>
+    .advanced-options { grid-column: 1 / -1; border-top: 1px solid #eadbc9; padding-top: 12px; }
+    .advanced-options summary { color: #80664e; cursor: pointer; font-weight: 650; }
+    .advanced-options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 15px; margin-top: 16px; }
+</style>
+
+<table>
+    <thead>
+        <tr>
+            <th>Artículo</th>
+            <th>Código de Barras</th>
+            <th>Tipo</th>
+            <th>Precio Compra</th>
+            <th>Ganancia %</th>
+            <th>Precio Venta</th>
+            <th>Etiqueta</th>
+            <th>Stock Actual</th>
+            <th>Estado</th>
+            <th style="text-align: center;">Acciones</th>
+        </tr>
+    </thead>
+    <tbody id="tabla-articulos">
+        <tr>
+            <td colspan="10" style="text-align: center; padding: 40px;">Cargando artículos...</td>
+        </tr>
+    </tbody>
+</table>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let articulosData = {};
+    let articulosLista = [];
+    let editandoId = null;
+    let intervaloArticulos = null;
+
+    function toggleFormula() {
+        const form = document.getElementById('formulario');
+        const abrir = form.style.display === 'none';
+        form.style.display = abrir ? 'block' : 'none';
+        if (abrir) {
+            calcularPrecioVenta();
+            document.getElementById('nombre').focus();
+        }
+    }
+
+    function generarCodigoNuevoFormulario() {
+        // Genera un código provisional de 11 dígitos con prefijo 779
+        const randomNum = Math.floor(10000000 + Math.random() * 90000000);
+        document.getElementById('codigo_barra').value = '779' + randomNum;
+    }
+
+    function calcularPrecioVenta() {
+        const compra = parseFloat(document.getElementById('precio_compra').value) || 0;
+        const margen = parseFloat(document.getElementById('margen_porcentaje').value) || 0;
+        const manual = document.getElementById('precio_venta_manual').value;
+
+        const preview = document.getElementById('precio-venta-preview');
+        if (manual) {
+            preview.textContent = '$' + formatNumero(manual) + ' (precio manual)';
+        } else {
+            preview.textContent = '$' + formatNumero(compra * (1 + margen / 100)) + ' (calculado)';
+        }
+    }
+
+    function cargarArticulos() {
+        if (editandoId !== null) return;
+
+        const incluirInactivos = document.getElementById('mostrar-inactivos').checked;
+        const url = '/api/articulos' + (incluirInactivos ? '?incluir_inactivos=1' : '');
+
+        fetch(url)
+            .then(r => r.json())
+            .then(articulos => {
+                articulosData = {};
+                articulos.forEach(a => articulosData[a.id] = a);
+                articulosLista = articulos;
+                filtrarArticulos();
+            });
+    }
+
+    function filtrarArticulos() {
+        const query = document.getElementById('buscar-articulo').value.trim().toLowerCase();
+        const filtrados = query
+            ? articulosLista.filter(a => 
+                a.nombre.toLowerCase().includes(query) || 
+                (a.codigo_barra && a.codigo_barra.toLowerCase().includes(query)) ||
+                String(a.id) === query
+              )
+            : articulosLista;
+        renderTabla(filtrados);
+    }
+
+    function renderTabla(articulos) {
+        if (editandoId !== null) return;
+
+        const tabla = document.getElementById('tabla-articulos');
+
+        if (articulos.length === 0) {
+            tabla.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #999;">No se encontraron artículos con esa búsqueda.</td></tr>';
+            return;
+        }
+
+        tabla.innerHTML = articulos.map(a => filaArticulo(a)).join('');
+    }
+
+    function filaArticulo(a) {
+        const precioVentaTexto = a.precio_venta_manual
+            ? '$' + formatNumero(a.precio_venta) + ' <span style="color:#999; font-size:0.85em;">(manual)</span>'
+            : '$' + formatNumero(a.precio_venta);
+
+        const estadoHtml = a.activo
+            ? `<span class="badge badge-${a.estado === 'OK' ? 'success' : 'danger'}">${a.estado === 'OK' ? 'EN STOCK' : 'REPONER'}</span>`
+            : `<span class="badge badge-warning">DADO DE BAJA</span>`;
+
+        const codigoHtml = a.codigo_barra 
+            ? `<span class="badge-barcode">📷 ${a.codigo_barra}</span>` 
+            : `<button class="btn" style="padding: 4px 8px; font-size: 0.8em; background:#edf2f7; color:#2d3748;" onclick="generarCodigo(${a.id})">⚡ Generar</button>`;
+
+        const accionesHtml = a.activo
+            ? `<div style="display: flex; gap: 6px; justify-content: center;">
+                <button class="btn btn-primary" style="padding: 6px 12px; font-size: 0.9em;" onclick="editarArticulo(${a.id})">✏️ Editar</button>
+                <a href="/etiquetas" class="btn" style="padding: 6px 10px; font-size: 0.9em; background: #e2e8f0; color: #333; text-decoration: none;" title="Imprimir Etiqueta">🏷️</a>
+                <button class="btn btn-danger" style="padding: 6px 10px; font-size: 0.85em;" onclick="darDeBaja(${a.id})" title="Dar de baja">🗑️</button>
+               </div>`
+            : `<button class="btn btn-success" style="padding: 6px 12px;" onclick="reactivarArticulo(${a.id})">↩️ Reactivar</button>`;
+
+        return `
+            <tr id="fila-${a.id}" style="${a.activo ? '' : 'opacity: 0.6;'}">
+                <td><strong>${a.nombre}</strong></td>
+                <td>${codigoHtml}</td>
+                <td>${a.tipo_venta}</td>
+                <td>$${formatNumero(a.precio_compra)}</td>
+                <td>${a.margen_porcentaje}%</td>
+                <td style="font-weight: bold; color: #2d3748;">${precioVentaTexto}</td>
+                <td>${a.lleva_etiqueta ? 'Sí' : 'No'}</td>
+                <td><strong>${formatNumero(a.stock_actual, 0)}</strong></td>
+                <td>${estadoHtml}</td>
+                <td style="text-align: center;">${accionesHtml}</td>
+            </tr>
+        `;
+    }
+
+    async function generarCodigo(id) {
+        try {
+            const res = await fetch(`/api/articulo/${id}/generar_codigo`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                mostrarAlerta(`✓ Código de barras asignado: ${data.codigo_barra}`, 'success');
+                cargarArticulos();
+            } else {
+                alert(data.error || 'Error al generar código');
+            }
+        } catch (e) {
+            alert('Error al comunicarse con el servidor');
+        }
+    }
+
+    function reactivarArticulo(id) {
+        fetch(`/api/articulo/${id}/activar`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✓ Artículo reactivado', 'success');
+                    cargarArticulos();
+                }
+            });
+    }
+
+    function darDeBaja(id) {
+        if (!confirm('¿Dar de baja este artículo? No va a aparecer más en Ventas ni Reposición, pero se conserva todo su historial.')) {
+            return;
+        }
+        fetch(`/api/articulo/${id}/baja`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✓ Artículo dado de baja', 'success');
+                    cargarArticulos();
+                }
+            });
+    }
+
+    function editarArticulo(id) {
+        editandoId = id;
+        const a = articulosData[id];
+        const fila = document.getElementById(`fila-${id}`);
+
+        fila.innerHTML = `
+            <td><strong>${a.nombre}</strong></td>
+            <td>
+                <input type="text" id="edit-codigo-${id}" value="${a.codigo_barra || ''}" placeholder="Escanear o generar" style="width: 130px; font-family: monospace; font-size: 0.9em; padding: 4px;">
+            </td>
+            <td>${a.tipo_venta}</td>
+            <td><input type="number" id="edit-precio_compra-${id}" value="${a.precio_compra}" step="0.01" style="width: 90px; padding: 4px;" oninput="calcularPrecioVentaEdit(${id})"></td>
+            <td><input type="number" id="edit-margen-${id}" value="${a.margen_porcentaje}" step="0.01" style="width: 70px; padding: 4px;" oninput="calcularPrecioVentaEdit(${id})"></td>
+            <td>
+                <input type="number" id="edit-manual-${id}" value="${a.precio_venta_manual !== null ? a.precio_venta_manual : ''}" step="0.01" placeholder="opcional" style="width: 90px; padding: 4px;" oninput="calcularPrecioVentaEdit(${id})">
+                <div style="font-size: 0.8em; color: #666;" id="edit-preview-${id}"></div>
+            </td>
+            <td><label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="edit-etiqueta-${id}" ${a.lleva_etiqueta ? 'checked' : ''} style="width:auto;margin:0;"> Sí</label></td>
+            <td><strong>${formatNumero(a.stock_actual, 0)}</strong></td>
+            <td>
+                <span class="badge badge-${a.estado === 'OK' ? 'success' : 'danger'}">${a.estado}</span>
+                <div style="font-size: 0.8em; color: #666; margin-top: 4px;">
+                    Alertar ≤ <input type="number" id="edit-alerta-${id}" value="${a.alerta_stock}" min="0" style="width: 50px; padding: 2px;">
+                </div>
+            </td>
+            <td style="text-align: center;">
+                <button class="btn btn-success" style="padding: 6px 12px;" onclick="guardarArticulo(${id})">💾 Guardar</button>
+                <button class="btn btn-danger" style="padding: 6px 12px; margin-left: 4px;" onclick="cancelarEdicion()">✕ Cancelar</button>
+            </td>
+        `;
+
+        calcularPrecioVentaEdit(id);
+    }
+
+    function calcularPrecioVentaEdit(id) {
+        const compra = parseFloat(document.getElementById(`edit-precio_compra-${id}`).value) || 0;
+        const margen = parseFloat(document.getElementById(`edit-margen-${id}`).value) || 0;
+        const manual = document.getElementById(`edit-manual-${id}`).value;
+
+        const preview = document.getElementById(`edit-preview-${id}`);
+        if (manual) {
+            preview.textContent = 'Venta: $' + formatNumero(manual);
+        } else {
+            preview.textContent = 'Venta: $' + formatNumero(compra * (1 + margen / 100));
+        }
+    }
+
+    function guardarArticulo(id) {
+        const precio_compra = document.getElementById(`edit-precio_compra-${id}`).value;
+        const margen_porcentaje = document.getElementById(`edit-margen-${id}`).value;
+        const precio_venta_manual = document.getElementById(`edit-manual-${id}`).value;
+        const alerta_stock = document.getElementById(`edit-alerta-${id}`).value;
+        const codigo_barra = document.getElementById(`edit-codigo-${id}`).value.trim();
+        const lleva_etiqueta = document.getElementById(`edit-etiqueta-${id}`).checked;
+
+        if (!precio_compra || !margen_porcentaje) {
+            mostrarAlerta('Completa los campos obligatorios', 'error');
+            return;
+        }
+
+        fetch(`/api/articulo/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                precio_compra,
+                margen_porcentaje,
+                precio_venta_manual: precio_venta_manual || null,
+                lleva_etiqueta,
+                alerta_stock: alerta_stock || 5,
+                codigo_barra: codigo_barra || null
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                mostrarAlerta('✓ Artículo actualizado', 'success');
+                editandoId = null;
+                cargarArticulos();
+            } else {
+                mostrarAlerta(data.error || 'Error al actualizar', 'error');
+            }
+        });
+    }
+
+    function cancelarEdicion() {
+        editandoId = null;
+        cargarArticulos();
+    }
+
+    function crearArticulo() {
+        const nombre = document.getElementById('nombre').value.trim();
+        const codigo_barra = document.getElementById('codigo_barra').value.trim();
+        const tipo_venta = document.getElementById('tipo_venta').value;
+        const precio_compra = document.getElementById('precio_compra').value;
+        const margen_porcentaje = document.getElementById('margen_porcentaje').value;
+        const precio_venta_manual = document.getElementById('precio_venta_manual').value;
+        const cantidad = document.getElementById('cantidad').value;
+        const alerta_stock = document.getElementById('alerta_stock').value;
+        const lleva_etiqueta = document.getElementById('lleva_etiqueta').checked;
+
+        if (!nombre || !tipo_venta || !precio_compra || !margen_porcentaje) {
+            mostrarAlerta('Completa los campos obligatorios (*)', 'error');
+            return;
+        }
+
+        fetch('/api/articulo/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nombre, 
+                codigo_barra: codigo_barra || null,
+                auto_generar_codigo: !codigo_barra,
+                tipo_venta, 
+                precio_compra, 
+                margen_porcentaje,
+                precio_venta_manual: precio_venta_manual || null,
+                cantidad: cantidad || 0,
+                lleva_etiqueta,
+                alerta_stock: alerta_stock || 5
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                mostrarAlerta('✓ Artículo creado correctamente', 'success');
+                document.getElementById('nombre').value = '';
+                document.getElementById('codigo_barra').value = '';
+                document.getElementById('tipo_venta').value = 'Unidad';
+                document.getElementById('precio_compra').value = '';
+                document.getElementById('margen_porcentaje').value = '60';
+                document.getElementById('precio_venta_manual').value = '';
+                document.getElementById('cantidad').value = '';
+                document.getElementById('lleva_etiqueta').checked = true;
+                document.getElementById('alerta_stock').value = '5';
+                toggleFormula();
+                cargarArticulos();
+            } else {
+                mostrarAlerta(data.error || 'Error al crear artículo', 'error');
+            }
+        });
+    }
+
+    // Cargar artículos al abrir la página
+    cargarArticulos();
+    intervaloArticulos = setInterval(cargarArticulos, 2500);
+</script>
+{% endblock %}

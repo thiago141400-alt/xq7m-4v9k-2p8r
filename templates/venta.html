@@ -1,0 +1,1026 @@
+{% extends "base.html" %}
+
+{% block title %}Ferretería | Punto de Venta{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Barra del Lector de Códigos de Barra */
+    .scanner-bar {
+        background: linear-gradient(135deg, #35251d 0%, #58402e 100%);
+        border: 2px solid #df8128;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        box-shadow: 0 5px 20px rgba(135, 83, 39, 0.24);
+    }
+
+    .scanner-icon {
+        font-size: 2.2em;
+        line-height: 1;
+    }
+
+    .scanner-input-wrapper {
+        flex: 1;
+        position: relative;
+    }
+
+    .scanner-input {
+        width: 100%;
+        font-size: 1.35em;
+        padding: 12px 18px;
+        border-radius: 6px;
+        border: 2px solid #374151;
+        background: #211913;
+        color: #10b981;
+        font-family: monospace;
+        letter-spacing: 1.5px;
+        transition: all 0.2s ease;
+    }
+
+    .scanner-input:focus {
+        outline: none;
+        border-color: #10b981;
+        box-shadow: 0 0 14px rgba(16, 185, 129, 0.5);
+    }
+
+    .scanner-status {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+        font-size: 0.85em;
+        color: #d1d5db;
+        white-space: nowrap;
+    }
+
+    .scanner-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981;
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Preferencias de venta, cerradas para dejar libre la caja */
+    .automation-bar {
+        background: #fbf6ed;
+        border: 1px solid #eadbc9;
+        border-radius: 8px;
+        padding: 12px 20px;
+        margin-bottom: 25px;
+        display: block;
+    }
+
+    .automation-bar summary { color: #60432f; font-weight: 650; }
+    .automation-bar[open] > div { margin-top: 14px; }
+
+    /* Modal para asociar código desconocido */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.65);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .modal-card {
+        background: white;
+        border-radius: 12px;
+        max-width: 500px;
+        width: 90%;
+        padding: 30px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        border-top: 5px solid #e08a2c;
+    }
+
+    .badge-code {
+        font-family: monospace;
+        background: #edf2f7;
+        padding: 4px 8px;
+        border-radius: 4px;
+        color: #2b6cb0;
+        font-size: 1.1em;
+        font-weight: bold;
+    }
+
+    .qty-btn {
+        background: #edf2f7;
+        border: 1px solid #cbd5e0;
+        font-size: 1.1em;
+        font-weight: bold;
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .qty-btn:hover {
+        background: #e2e8f0;
+        border-color: #a0aec0;
+    }
+
+    /* Ticket de impresión */
+    #ticket-impresion {
+        display: none;
+    }
+
+    @media print {
+        @page {
+            size: 58mm auto;
+            margin: 0;
+        }
+        html, body, .container, .content {
+            width: 58mm !important;
+            min-width: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        body * {
+            visibility: hidden !important;
+        }
+        #ticket-impresion, #ticket-impresion * {
+            visibility: visible !important;
+        }
+        #ticket-impresion {
+            display: block !important;
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 58mm !important;
+            font-family: monospace !important;
+            font-size: 11px !important;
+            color: black !important;
+            padding: 2mm !important;
+            margin: 0 !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print">
+    <h2>⚡ Punto de Venta (POS) - 100% Automático</h2>
+
+    <!-- Barra de Escáner de Códigos de Barra -->
+    <div class="scanner-bar">
+        <div class="scanner-icon">▦</div>
+        <div class="scanner-input-wrapper">
+            <input type="text" id="codigo-escaner" class="scanner-input" 
+                   placeholder="Escaneá un producto o escribí su código"
+                   autocomplete="off" autofocus>
+        </div>
+        <div class="scanner-status">
+            <div><span class="scanner-indicator"></span> <strong style="color: #a6c36f;">Lector listo</strong></div>
+        </div>
+    </div>
+
+    <!-- Barra de opciones automáticas -->
+    <details class="automation-bar">
+        <summary style="cursor:pointer; font-weight:650; color:#60432f;">Opciones de venta</summary>
+        <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; cursor: pointer;">
+                <input type="checkbox" id="toggle-voz" checked style="width: 18px; height: 18px;">
+                <span>🔊 Cantar Productos por Voz</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; cursor: pointer;">
+                <input type="checkbox" id="toggle-ticket-auto" style="width: 18px; height: 18px;">
+                <span>🧾 Imprimir Ticket Automático al Cobrar</span>
+            </label>
+            <button class="btn" type="button" onclick="imprimirUltimoTicket()" style="padding: 8px 12px; background: #eee2d1; color: #4b3829;">↻ Reimprimir último ticket</button>
+        </div>
+    </details>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 25px;">
+        <!-- Selección manual de respaldo -->
+        <div>
+            <div class="card">
+                <div class="card-title">Búsqueda / Selección Manual (Opcional)</div>
+
+                <div class="form-group">
+                    <label for="articulo">Artículo</label>
+                    <select id="articulo" onchange="actualizarPrecio()">
+                        <option value="">-- Selecciona un artículo --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="cantidad">Cantidad <span id="cantidad-unidad" style="font-weight: normal; color: #666;"></span></label>
+                    <input type="number" id="cantidad" placeholder="1" step="1" min="1" value="1" oninput="calcularTotal()">
+                </div>
+
+                <div style="background: #f0f2f5; padding: 12px; border-radius: 6px; margin: 15px 0;">
+                    <div style="margin-bottom: 6px; display: flex; justify-content: space-between;">
+                        <span style="color: #666;">Precio:</span>
+                        <strong id="precio-ref" style="color: #e08a2c;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #333; font-weight: 600;">Subtotal:</span>
+                        <strong id="total-cobrar" style="font-size: 1.2em; color: #48bb78;">-</strong>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="agregarAlCarrito()" style="width: 100%; padding: 12px;">
+                    🛒 Agregar al Carrito
+                </button>
+            </div>
+        </div>
+
+        <!-- Resumen del día -->
+        <div>
+            <div class="card">
+                <div class="card-title">Resumen Financiero Hoy</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 10px;">
+                    <div>
+                        <div style="color: #999; font-size: 0.85em;">Total Vendido</div>
+                        <div class="card-value" id="vendido-hoy" style="font-size: 1.4em; color: #2d3748;">$0.00</div>
+                    </div>
+                    <div>
+                        <div style="color: #999; font-size: 0.85em;">Inversión</div>
+                        <div class="card-value" id="invertido-hoy" style="font-size: 1.4em; color: #f56565;">$0.00</div>
+                    </div>
+                    <div>
+                        <div style="color: #999; font-size: 0.85em;">GANANCIA</div>
+                        <div class="card-value" id="ganancia-hoy" style="font-size: 1.4em; color: #48bb78;">$0.00</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Carrito de venta -->
+    <div class="card">
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🛒 Carrito de Venta (<span id="carrito-cantidad">0</span> artículos)</span>
+            <span style="font-size: 0.85em; font-weight: normal; color: #666;">
+                Cada disparo suma +1 automáticamente
+            </span>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Artículo</th>
+                    <th>Código</th>
+                    <th>Tipo</th>
+                    <th style="text-align: center; width: 140px;">Cantidad</th>
+                    <th>Subtotal</th>
+                    <th>Ganancia</th>
+                    <th style="width: 50px;"></th>
+                </tr>
+            </thead>
+            <tbody id="tabla-carrito">
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 25px; color: #999;">
+                        El carrito está vacío. ¡Dispara el lector sobre cualquier producto para comenzar!
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; background: #f0f2f5; padding: 15px; border-radius: 6px;">
+            <div>
+                <div style="color: #999; font-size: 0.9em;">Costo mercadería</div>
+                <strong id="carrito-costo" style="color: #f56565; font-size: 1.2em;">$0.00</strong>
+            </div>
+            <div>
+                <div style="color: #999; font-size: 0.9em;">TOTAL A COBRAR</div>
+                <strong id="carrito-total" style="color: #1a202c; font-size: 1.5em; font-weight: 900;">$0.00</strong>
+            </div>
+            <div>
+                <div style="color: #999; font-size: 0.9em;">Ganancia neta</div>
+                <strong id="carrito-ganancia" style="color: #48bb78; font-size: 1.5em;">$0.00</strong>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+            <button class="btn btn-danger" onclick="vaciarCarrito()" style="padding: 16px;">
+                ✕ Vaciar carrito
+            </button>
+            <button class="btn btn-success" id="btn-confirmar-venta" onclick="confirmarVenta()" style="font-size: 1.2em; padding: 16px; font-weight: bold;" disabled>
+                ✓ Confirmar venta (F4)
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal para asociar código desconocido -->
+    <div id="modal-asociar" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <h3 style="margin-bottom: 15px; color: #2d3748;">⚠️ Código no registrado</h3>
+            <p style="margin-bottom: 15px;">
+                El código escaneado <span class="badge-code" id="modal-codigo-desconocido"></span> es nuevo.
+            </p>
+            <p style="font-size: 0.9em; color: #666; margin-bottom: 20px;">
+                Asócialo a qué artículo corresponde para que la próxima vez se reconozca automáticamente:
+            </p>
+
+            <div class="form-group">
+                <label for="select-asociar-articulo">Selecciona el artículo:</label>
+                <select id="select-asociar-articulo" style="width: 100%;">
+                    <option value="">-- Elige un artículo --</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
+                <button class="btn" style="background: #e2e8f0; color: #333;" onclick="cerrarModalAsociar()">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarAsociacionCodigo()">🔗 Asociar y Agregar al Carrito</button>
+            </div>
+        </div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Historial de Compras</h3>
+    <div class="form-group" style="max-width: 220px;">
+        <label for="fecha-ventas">Fecha</label>
+        <input type="date" id="fecha-ventas" onchange="cargarTransacciones()">
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Nº Compra</th>
+                <th>Hora</th>
+                <th>Productos</th>
+                <th>Total</th>
+                <th>Ganancia</th>
+                <th style="text-align: center;">Acción</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-transacciones">
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 20px;">Cargando compras...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Ticket térmico para impresión automática -->
+<div id="ticket-impresion">
+    <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 5px; margin-bottom: 5px;">
+        <strong style="font-size: 14px;">FERRETERÍA</strong><br>
+        <span>Ticket de Venta</span><br>
+        <span id="ticket-fecha">-</span> | Compra <strong id="ticket-num">#-</strong>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 5px;">
+        <tbody id="ticket-cuerpo">
+        </tbody>
+    </table>
+    <div style="border-top: 1px dashed black; padding-top: 5px; text-align: right;">
+        <strong style="font-size: 13px;">TOTAL: $<span id="ticket-total">0.00</span></strong>
+    </div>
+    <div style="text-align: center; margin-top: 10px; font-size: 10px;">
+        ¡Gracias por su compra!<br>
+        ================================
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let articulosData = {};
+    let carrito = [];
+    let codigoPendienteAsociar = null;
+    let ventaEnProceso = false;
+    let scannerQueue = Promise.resolve();
+
+    const opcionTicketAuto = document.getElementById('toggle-ticket-auto');
+    opcionTicketAuto.checked = localStorage.getItem('ferreteria-ticket-auto') === 'true';
+    opcionTicketAuto.addEventListener('change', () => {
+        localStorage.setItem('ferreteria-ticket-auto', String(opcionTicketAuto.checked));
+    });
+
+    // Síntesis de voz automática ("Cantar" artículos)
+    function cantarVoz(texto) {
+        if (!document.getElementById('toggle-voz').checked) return;
+        try {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(texto);
+                utter.lang = 'es-AR';
+                utter.rate = 1.15;
+                window.speechSynthesis.speak(utter);
+            }
+        } catch (e) {}
+    }
+
+    // Sonidos BEEP de caja registradora
+    function reproducirBeep(exito = true) {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            if (exito) {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, ctx.currentTime);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.12);
+            } else {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(280, ctx.currentTime);
+                gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.25);
+            }
+        } catch (e) {}
+    }
+
+    function cargarArticulos() {
+        fetch('/api/articulos')
+            .then(r => r.json())
+            .then(articulos => {
+                articulosData = {};
+                const select = document.getElementById('articulo');
+                const selectAsociar = document.getElementById('select-asociar-articulo');
+                select.innerHTML = '<option value="">-- Selecciona un artículo --</option>';
+                selectAsociar.innerHTML = '<option value="">-- Elige un artículo --</option>';
+
+                articulos.forEach(a => {
+                    articulosData[a.id] = a;
+                    const stockBadge = `(Stock: ${formatNumero(a.stock_actual, 0)})`;
+                    const cbText = a.codigo_barra ? `[CB: ${a.codigo_barra}]` : '';
+                    select.innerHTML += `<option value="${a.id}">${a.nombre} - ${a.tipo_venta} ${stockBadge}</option>`;
+                    selectAsociar.innerHTML += `<option value="${a.id}">${a.nombre} ${cbText}</option>`;
+                });
+            });
+    }
+
+    function actualizarPrecio() {
+        const articuloId = document.getElementById('articulo').value;
+        const cantidadInput = document.getElementById('cantidad');
+        if (!articuloId) {
+            cantidadInput.step = '1';
+            cantidadInput.min = '1';
+            document.getElementById('precio-ref').textContent = '-';
+            document.getElementById('cantidad-unidad').textContent = '';
+            calcularTotal();
+            return;
+        }
+
+        const articulo = articulosData[articuloId];
+        // La flecha siempre avanza una unidad; si vende por metro se pueden
+        // escribir decimales manualmente en el campo.
+        cantidadInput.step = '1';
+        cantidadInput.min = '1';
+        document.getElementById('precio-ref').textContent = '$' + formatNumero(articulo.precio_venta);
+        document.getElementById('cantidad-unidad').textContent = '(' + articulo.tipo_venta + ')';
+        calcularTotal();
+    }
+
+    function calcularTotal() {
+        const articuloId = document.getElementById('articulo').value;
+        const cantidad = parseFloat(document.getElementById('cantidad').value) || 0;
+        if (!articuloId || cantidad === 0) {
+            document.getElementById('total-cobrar').textContent = '-';
+            return;
+        }
+        const articulo = articulosData[articuloId];
+        document.getElementById('total-cobrar').textContent = '$' + formatNumero(cantidad * articulo.precio_venta);
+    }
+
+    // =========================================================================
+    // PROCESADOR DE ESCÁNER 100% AUTOMÁTICO
+    // =========================================================================
+
+    async function procesarCodigoEscaneado(codigo) {
+        codigo = (codigo || '').trim();
+        if (!codigo) return;
+
+        // 1. Detección de Códigos de Barra de Comando (pegados en el mostrador)
+        const codigoUpper = codigo.toUpperCase();
+        if (codigoUpper === 'CMD-COBRAR' || codigoUpper === 'CMD-CONFIRMAR' || codigoUpper === '*COBRAR*') {
+            reproducirBeep(true);
+            cantarVoz('Cobrando venta');
+            confirmarVenta();
+            limpiarInputScanner();
+            return;
+        }
+
+        if (codigoUpper === 'CMD-CANCELAR' || codigoUpper === 'CMD-VACIAR' || codigoUpper === '*CANCELAR*') {
+            reproducirBeep(false);
+            cantarVoz('Venta cancelada');
+            vaciarCarrito();
+            limpiarInputScanner();
+            return;
+        }
+
+        if (codigoUpper === 'CMD-TICKET' || codigoUpper === '*TICKET*') {
+            reproducirBeep(true);
+            imprimirUltimoTicket();
+            limpiarInputScanner();
+            return;
+        }
+
+        // 2. Consulta automática de producto
+        try {
+            const res = await fetch('/api/articulo/buscar_codigo/' + encodeURIComponent(codigo));
+            const data = await res.json();
+
+            if (data.success && data.articulo) {
+                const art = data.articulo;
+                reproducirBeep(true);
+
+                // Cantar el artículo y precio por voz
+                cantarVoz(`${art.nombre}, ${Math.round(art.precio_venta)} pesos`);
+
+                const index = carrito.findIndex(i => String(i.articulo_id) === String(art.id));
+                if (index >= 0) {
+                    modificarCantidadCarrito(index, 1);
+                } else {
+                    const costo = 1 * art.precio_compra;
+                    const total = 1 * art.precio_venta;
+                    const ganancia = total - costo;
+
+                    carrito.push({
+                        articulo_id: art.id,
+                        nombre: art.nombre,
+                        codigo_barra: art.codigo_barra,
+                        tipo_venta: art.tipo_venta,
+                        precio_compra: art.precio_compra,
+                        precio_venta: art.precio_venta,
+                        cantidad: 1,
+                        costo,
+                        total,
+                        ganancia
+                    });
+                    renderCarrito();
+                }
+
+                mostrarAlerta(`✓ [${art.nombre}] escaneado ($${formatNumero(art.precio_venta)})`, 'success');
+            } else {
+                reproducirBeep(false);
+                cantarVoz('Código no encontrado');
+                abrirModalAsociar(codigo);
+            }
+        } catch (e) {
+            reproducirBeep(false);
+            mostrarAlerta('Error de conexión', 'error');
+        } finally {
+            limpiarInputScanner();
+        }
+    }
+
+    function limpiarInputScanner() {
+        const inp = document.getElementById('codigo-escaner');
+        inp.value = '';
+        // preventScroll: true asegura que NUNCA salte la pantalla hacia arriba
+        inp.focus({ preventScroll: true });
+    }
+
+    // Modal para asociar código nuevo
+    function abrirModalAsociar(codigo) {
+        codigoPendienteAsociar = codigo;
+        document.getElementById('modal-codigo-desconocido').textContent = codigo;
+        document.getElementById('modal-asociar').style.display = 'flex';
+    }
+
+    function cerrarModalAsociar() {
+        codigoPendienteAsociar = null;
+        document.getElementById('modal-asociar').style.display = 'none';
+        limpiarInputScanner();
+    }
+
+    async function guardarAsociacionCodigo() {
+        const articuloId = document.getElementById('select-asociar-articulo').value;
+        if (!articuloId) {
+            alert('Selecciona un artículo');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/articulo/asociar_codigo', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    articulo_id: parseInt(articuloId),
+                    codigo_barra: codigoPendienteAsociar
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                mostrarAlerta(`✓ Código asociado a ${articulosData[articuloId].nombre}`, 'success');
+                const codigoAAgregar = codigoPendienteAsociar;
+                cerrarModalAsociar();
+                cargarArticulos();
+                procesarCodigoEscaneado(codigoAAgregar);
+            } else {
+                alert(data.error || 'No se pudo asociar');
+            }
+        } catch (e) {
+            alert('Error de conexión');
+        }
+    }
+
+    // Eventos del input del escáner
+    const inputScanner = document.getElementById('codigo-escaner');
+    inputScanner.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const codigo = inputScanner.value;
+            inputScanner.value = '';
+            scannerQueue = scannerQueue.then(() => procesarCodigoEscaneado(codigo));
+        }
+    });
+
+    // Captura global de ráfaga del lector de código de barras sin robar el foco ni mover el scroll
+    let scannerBuffer = '';
+    let ultimoKeyTime = Date.now();
+
+    window.addEventListener('keydown', (e) => {
+        // Si el usuario está completando datos en inputs de fecha o cantidades, no interferir
+        // El input principal tiene su propio manejador para Enter; ignorarlo aquí evita duplicar ventas.
+        if (e.target.tagName === 'INPUT') return;
+        if (e.target.tagName === 'SELECT') return;
+
+        const ahora = Date.now();
+        const diff = ahora - ultimoKeyTime;
+        ultimoKeyTime = ahora;
+
+        if (e.key === 'Enter') {
+            if (scannerBuffer.length >= 3) {
+                e.preventDefault();
+                scannerQueue = scannerQueue.then(() => procesarCodigoEscaneado(scannerBuffer));
+                scannerBuffer = '';
+            }
+        } else if (e.key.length === 1) {
+            // Si el tiempo entre teclas supera 80ms, es escritura humana lenta; reseteamos el buffer
+            if (diff > 80) {
+                scannerBuffer = '';
+            }
+            scannerBuffer += e.key;
+        }
+    });
+
+    // Tecla rápida F2 para enfocar el lector en cualquier momento
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'F4') {
+            e.preventDefault();
+            confirmarVenta();
+            return;
+        }
+        if (e.key === 'F2') {
+            e.preventDefault();
+            inputScanner.focus({ preventScroll: true });
+            inputScanner.select();
+        }
+    });
+
+    // =========================================================================
+    // CARRITO Y VENTA MANUAL
+    // =========================================================================
+
+    function agregarAlCarrito() {
+        const articuloId = document.getElementById('articulo').value;
+        const cantidad = parseFloat(document.getElementById('cantidad').value);
+
+        if (!articuloId || !cantidad || cantidad <= 0) {
+            mostrarAlerta('Completa todos los datos', 'error');
+            return;
+        }
+
+        const articulo = articulosData[articuloId];
+        const index = carrito.findIndex(i => String(i.articulo_id) === String(articuloId));
+        if (index >= 0) {
+            modificarCantidadCarrito(index, cantidad);
+        } else {
+            const costo = cantidad * articulo.precio_compra;
+            const total = cantidad * articulo.precio_venta;
+            const ganancia = total - costo;
+
+            carrito.push({
+                articulo_id: articuloId,
+                nombre: articulo.nombre,
+                codigo_barra: articulo.codigo_barra,
+                tipo_venta: articulo.tipo_venta,
+                precio_compra: articulo.precio_compra,
+                precio_venta: articulo.precio_venta,
+                cantidad,
+                costo,
+                total,
+                ganancia
+            });
+            renderCarrito();
+        }
+
+        cantarVoz(`${articulo.nombre}`);
+        document.getElementById('articulo').value = '';
+        document.getElementById('cantidad').value = '1';
+        actualizarPrecio();
+        limpiarInputScanner();
+    }
+
+    function modificarCantidadCarrito(index, delta) {
+        if (!carrito[index]) return;
+        const item = carrito[index];
+        const nuevaCantidad = item.cantidad + delta;
+        if (nuevaCantidad <= 0) {
+            quitarDelCarrito(index);
+            return;
+        }
+        item.cantidad = Math.round(nuevaCantidad * 100) / 100;
+        item.costo = item.cantidad * item.precio_compra;
+        item.total = item.cantidad * item.precio_venta;
+        item.ganancia = item.total - item.costo;
+        renderCarrito();
+    }
+
+    function actualizarCantidadManual(index, input) {
+        if (!carrito[index]) return;
+        const valor = parseFloat(input.value) || 0;
+        if (valor <= 0) {
+            quitarDelCarrito(index);
+            return;
+        }
+        const item = carrito[index];
+        item.cantidad = valor;
+        item.costo = item.cantidad * item.precio_compra;
+        item.total = item.cantidad * item.precio_venta;
+        item.ganancia = item.total - item.costo;
+        renderCarrito();
+    }
+
+    function quitarDelCarrito(index) {
+        carrito.splice(index, 1);
+        renderCarrito();
+        limpiarInputScanner();
+    }
+
+    function vaciarCarrito() {
+        carrito = [];
+        renderCarrito();
+        limpiarInputScanner();
+    }
+
+    function renderCarrito() {
+        const tbody = document.getElementById('tabla-carrito');
+        document.getElementById('carrito-cantidad').textContent = carrito.length;
+
+        if (carrito.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 25px; color: #999;">El carrito está vacío. ¡Dispara el lector sobre cualquier producto para comenzar!</td></tr>';
+        } else {
+            tbody.innerHTML = carrito.map((item, i) => `
+                <tr>
+                    <td><strong>${item.nombre}</strong></td>
+                    <td><span style="font-family: monospace; color: #718096; font-size: 0.9em;">${item.codigo_barra || '-'}</span></td>
+                    <td>${item.tipo_venta}</td>
+                    <td style="text-align: center;">
+                        <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                            <button class="qty-btn" onclick="modificarCantidadCarrito(${i}, -1)">-</button>
+                            <input type="number" step="1" min="1" value="${item.cantidad}"
+                                   style="width: 60px; text-align: center; margin: 0; padding: 4px;" 
+                                   onchange="actualizarCantidadManual(${i}, this)">
+                            <button class="qty-btn" onclick="modificarCantidadCarrito(${i}, 1)">+</button>
+                        </div>
+                    </td>
+                    <td style="font-weight: bold; color: #2d3748;">$${formatNumero(item.total)}</td>
+                    <td style="color: #48bb78;">$${formatNumero(item.ganancia)}</td>
+                    <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.9em;" onclick="quitarDelCarrito(${i})">✕</button></td>
+                </tr>
+            `).join('');
+        }
+
+        const costoTotal = carrito.reduce((s, i) => s + i.costo, 0);
+        const totalCobrar = carrito.reduce((s, i) => s + i.total, 0);
+        const gananciaTotal = carrito.reduce((s, i) => s + i.ganancia, 0);
+
+        document.getElementById('carrito-costo').textContent = '$' + formatNumero(costoTotal);
+        document.getElementById('carrito-total').textContent = '$' + formatNumero(totalCobrar);
+        document.getElementById('carrito-ganancia').textContent = '$' + formatNumero(gananciaTotal);
+
+        document.getElementById('btn-confirmar-venta').disabled = carrito.length === 0;
+    }
+
+    function confirmarVenta() {
+        if (carrito.length === 0 || ventaEnProceso) return;
+
+        ventaEnProceso = true;
+        const botonCobrar = document.getElementById('btn-confirmar-venta');
+        botonCobrar.disabled = true;
+
+        const totalCobrable = carrito.reduce((s, i) => s + i.total, 0);
+        const items = carrito.map(i => ({
+            articulo_id: i.articulo_id,
+            cantidad: i.cantidad
+        }));
+
+        fetch('/api/venta/crear_multiple', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({items})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                reproducirBeep(true);
+                cantarVoz(`Venta confirmada por ${Math.round(totalCobrable)} pesos`);
+                mostrarAlerta('✓ Compra #' + data.numero_dia + ' confirmada con éxito ($' + formatNumero(totalCobrable) + ')', 'success');
+                
+                // Si el checkbox de ticket automático está activo, imprimir ticket
+                if (opcionTicketAuto.checked) {
+                    imprimirTicket(data.transaccion_id);
+                }
+
+                vaciarCarrito();
+                cargarArticulos();
+                recargarResumen();
+                cargarTransacciones();
+            } else {
+                mostrarAlerta(data.error || 'No se pudo registrar la venta', 'error');
+            }
+        })
+        .catch(() => mostrarAlerta('No se pudo conectar con el servidor. La venta no se confirmó.', 'error'))
+        .finally(() => {
+            ventaEnProceso = false;
+            botonCobrar.disabled = carrito.length === 0;
+            limpiarInputScanner();
+        });
+    }
+
+    // Impresión de ticket para cliente
+    function imprimirUltimoTicket() {
+        imprimirTicket();
+    }
+
+    function imprimirTicket(transaccionId = null) {
+        const url = transaccionId
+            ? `/api/ventas/ultimo_ticket?id=${encodeURIComponent(transaccionId)}`
+            : '/api/ventas/ultimo_ticket';
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('ticket-fecha').textContent = data.fecha;
+                    document.getElementById('ticket-num').textContent = '#' + data.numero_dia;
+                    document.getElementById('ticket-total').textContent = formatNumero(data.total);
+
+                    const cuerpo = document.getElementById('ticket-cuerpo');
+                    cuerpo.innerHTML = data.items.map(it => `
+                        <tr>
+                            <td colspan="2">${it.articulo}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px dotted #ccc;">
+                            <td style="color: #555;">${formatNumero(it.cantidad)} x $${formatNumero(it.precio_unitario)}</td>
+                            <td style="text-align: right; font-weight: bold;">$${formatNumero(it.total)}</td>
+                        </tr>
+                    `).join('');
+
+                    window.print();
+                } else {
+                    mostrarAlerta(data.error || 'No hay un ticket para imprimir', 'error');
+                }
+            })
+            .catch(() => mostrarAlerta('No se pudo cargar el ticket. Revisá la conexión.', 'error'));
+    }
+
+    function recargarResumen() {
+        fetch('/api/reportes/hoy')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('vendido-hoy').textContent = '$' + formatNumero(data.total_vendido);
+                document.getElementById('invertido-hoy').textContent = '$' + formatNumero(data.costo_total);
+                document.getElementById('ganancia-hoy').textContent = '$' + formatNumero(data.ganancia_total);
+            });
+    }
+
+    let idDetalleAbierto = null;
+
+    function cargarTransacciones(forzar = false) {
+        // Si el usuario tiene abierto el detalle de una compra, no sobreescribir la tabla
+        if (idDetalleAbierto !== null && !forzar) {
+            return;
+        }
+
+        const fecha = document.getElementById('fecha-ventas').value;
+        fetch('/api/ventas/transacciones?fecha=' + fecha)
+            .then(r => r.json())
+            .then(transacciones => {
+                const tbody = document.getElementById('tabla-transacciones');
+                if (transacciones.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">No hay compras registradas ese día.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = transacciones.map(t => `
+                    <tr>
+                        <td><strong>#${t.numero_dia}</strong></td>
+                        <td>${t.hora}</td>
+                        <td>${t.cantidad_items} producto(s)</td>
+                        <td>$${formatNumero(t.total)}</td>
+                        <td>$${formatNumero(t.ganancia)}</td>
+                        <td style="text-align: center;">
+                            <button type="button" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.9em;" onclick="verDetalleCompra(${t.id}, event)">Detalle</button>
+                        </td>
+                    </tr>
+                    <tr id="fila-detalle-${t.id}" style="display: none;">
+                        <td colspan="6" id="contenido-detalle-${t.id}"></td>
+                    </tr>
+                `).join('');
+            });
+    }
+
+    function verDetalleCompra(id, event) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+
+        const fila = document.getElementById(`fila-detalle-${id}`);
+        if (!fila) return;
+
+        const estabaAbierta = fila.style.display !== 'none';
+        document.querySelectorAll('[id^="fila-detalle-"]').forEach(f => f.style.display = 'none');
+
+        if (estabaAbierta) {
+            idDetalleAbierto = null;
+            return;
+        }
+
+        idDetalleAbierto = id;
+        fetch(`/api/ventas/transaccion/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                const contenido = document.getElementById(`contenido-detalle-${id}`);
+                contenido.innerHTML = `
+                    <div style="background: #f0f2f5; padding: 15px; border-radius: 6px;">
+                        <table style="margin: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Artículo</th>
+                                    <th>Tipo</th>
+                                    <th>Cantidad</th>
+                                    <th>Subtotal</th>
+                                    <th>Ganancia</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.items.map(i => `
+                                    <tr>
+                                        <td>${i.articulo}</td>
+                                        <td>${i.tipo_venta}</td>
+                                        <td>${formatNumero(i.cantidad)}</td>
+                                        <td>$${formatNumero(i.total)}</td>
+                                        <td>$${formatNumero(i.ganancia)}</td>
+                                        <td><button type="button" class="btn btn-danger" style="padding: 6px 12px;" onclick="anularVenta(${i.id}, ${id})">🗑️ Anular</button></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                fila.style.display = '';
+            });
+    }
+
+    function anularVenta(itemId, transaccionId) {
+        if (!confirm('¿Anular esta venta? El artículo vuelve al stock automáticamente.')) {
+            return;
+        }
+
+        fetch(`/api/venta/${itemId}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarAlerta('✓ Venta anulada, stock repuesto', 'success');
+                    idDetalleAbierto = null;
+                    cargarArticulos();
+                    recargarResumen();
+                    cargarTransacciones(true);
+                }
+            });
+    }
+
+    const hoy = new Date();
+    document.getElementById('fecha-ventas').value = hoy.toISOString().split('T')[0];
+    document.getElementById('fecha-ventas').max = hoy.toISOString().split('T')[0];
+
+    // Inicializar
+    cargarArticulos();
+    recargarResumen();
+    cargarTransacciones();
+    renderCarrito();
+    limpiarInputScanner();
+
+    setInterval(() => { recargarResumen(); cargarTransacciones(); }, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+name: Publicar nueva versión
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publicar-version-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Aumentar versión
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          path = Path("version.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          parts = [int(part) for part in data.get("version", "1.0.0").split(".")]
+          while len(parts) < 3:
+              parts.append(0)
+          parts[2] += 1
+          data["version"] = ".".join(map(str, parts[:3]))
+          data["notes"] = subprocess.check_output(["git", "log", "-1", "--pretty=%s"], text=True).strip()
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(data["version"])
+          PY
+          )"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Guardar versión publicada
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          git commit -m "chore: publicar versión $VERSION"
+          git push origin HEAD:main
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Preparar código editable sin datos locales
+        run: |
+          zip -r ferreteria-app-codigo.zip \
+            app.py templates INICIAR.sh INICIAR.bat README.md requirements.txt version.json icon.svg .gitignore .github/workflows/publicar-version.yml \
+            -x '*/__pycache__/*'
+
+      - name: Crear publicación
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          NOTAS="$(python -c 'import json; print(json.load(open("version.json", encoding="utf-8")).get("notes", "Nueva versión de Ferretería."))')"
+          gh release create "v$VERSION" ferreteria-app-codigo.zip \
+            --title "Ferretería v$VERSION" \
+            --notes "$NOTAS"
